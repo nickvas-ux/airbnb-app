@@ -9,7 +9,6 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Βιβλιοθήκη για εξαγωγή Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100">
@@ -24,19 +23,22 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjeHJjb3lqeWt2Y2xhZGZrZ3VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxMTg0NDcsImV4cCI6MjA5NDY5NDQ0N30.yA8x4RAbpKa6WM69v3r2YPWlJI8hhbnLnUA05pajtaA';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        const MONTH_NAMES = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
+
         function App() {
             const [authStep, setAuthStep] = useState('LOGIN');
             const [role, setRole] = useState(null);
             const [bookings, setBookings] = useState([]);
             const [username, setUsername] = useState('');
             const [password, setPassword] = useState('');
-            const [activeTab, setActiveTab] = useState('upcoming'); // 'current', 'upcoming', 'past', 'calendar', 'settings'
+            const [activeTab, setActiveTab] = useState('upcoming'); 
             
-            // Τοπικοί κωδικοί
+            const [currentDate, setCurrentDate] = useState(new Date());
+            
             const [adminCreds, setAdminCreds] = useState(() => JSON.parse(localStorage.getItem('adminCreds')) || { u: 'admin', p: 'admin' });
             const [staffCreds, setStaffCreds] = useState(() => JSON.parse(localStorage.getItem('staffCreds')) || { u: 'staff', p: 'staff' });
 
-            // Φόρμα
+            // Φόρμα - ΟΛΑ ΤΑ ΠΕΔΙΑ ΤΗΣ ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ
             const [showForm, setShowForm] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [guestname, setGuestname] = useState('');
@@ -86,7 +88,7 @@
                     setStaffCreds(newCreds);
                     localStorage.setItem('staffCreds', JSON.stringify(newCreds));
                 }
-                alert("Τα στοιχεία σύνδεσης ενημερώθηκαν επιτυχώς για αυτή τη συσκευή!");
+                alert("Τα στοιχεία σύνδεσης ενημερώθηκαν επιτυχώς!");
             };
 
             const openNewForm = () => {
@@ -100,23 +102,46 @@
 
             const openEditForm = (b) => {
                 setEditingId(b.id);
-                setGuestname(b.guestname || ''); setIdtype(b.idtype || 'ΑΦΜ'); setGuestid(b.guestid || ''); setCountry(b.country || 'Ελλάδα');
-                setCheckindate(b.checkindate || ''); setCheckintime(b.checkintime || ''); setIscheckinunknown(b.ischeckinunknown || false);
-                setCheckoutdate(b.checkoutdate || ''); setCheckouttime(b.checkouttime || ''); setIscheckoutunknown(b.ischeckoutunknown || false);
-                setPrice(b.price || ''); setPax(b.pax || '2'); setPets(b.pets || false); setNotes(b.notes || ''); setIsaadecomplete(b.isaadecomplete || false);
+                setGuestname(b.guestname || '');
+                setIdtype(b.idtype || 'ΑΦΜ');
+                setGuestid(b.guestid || '');
+                setCountry(b.country || 'Ελλάδα');
+                setCheckindate(b.checkindate || '');
+                setCheckintime(b.checkintime || '');
+                setIscheckinunknown(b.ischeckinunknown !== undefined ? b.ischeckinunknown : true);
+                setCheckoutdate(b.checkoutdate || '');
+                setCheckouttime(b.checkouttime || '');
+                setIscheckoutunknown(b.ischeckoutunknown !== undefined ? b.ischeckoutunknown : true);
+                setPrice(b.price || '');
+                setPax(b.pax || '2');
+                setPets(b.pets || false);
+                setNotes(b.notes || '');
+                setIsaadecomplete(b.isaadecomplete || false);
                 setShowForm(true);
             };
 
             const saveBooking = () => {
                 if (!guestname || !checkindate || !checkoutdate) return alert("Το Όνομα, η Άφιξη και η Αναχώρηση είναι υποχρεωτικά.");
+                
                 const bookingData = {
-                    guestname, idtype, guestid, country, checkindate, checkintime: ischeckinunknown ? null : checkintime,
-                    ischeckinunknown, checkoutdate, checkouttime: ischeckoutunknown ? null : checkouttime, ischeckoutunknown,
+                    guestname, idtype, guestid, country, checkindate, 
+                    checkintime: ischeckinunknown ? null : checkintime,
+                    ischeckinunknown, checkoutdate, 
+                    checkouttime: ischeckoutunknown ? null : checkouttime, 
+                    ischeckoutunknown,
                     price: Number(price) || 0, pax: Number(pax) || 2, pets, notes, isaadecomplete
                 };
+                
                 let request = editingId ? supabaseClient.from('bookings').update(bookingData).eq('id', editingId) : supabaseClient.from('bookings').insert([bookingData]);
+                
                 request.then(response => {
-                    if (!response.error) { setShowForm(false); fetchBookings(); } else alert("Σφάλμα: " + response.error.message);
+                    if (!response.error) { 
+                        setShowForm(false); 
+                        fetchBookings(); 
+                        alert("Η κράτηση αποθηκεύτηκε επιτυχώς!");
+                    } else {
+                        alert("Σφάλμα: " + response.error.message);
+                    }
                 });
             };
 
@@ -131,55 +156,96 @@
                     'Ονοματεπώνυμο': b.guestname,
                     'Τύπος Εγγράφου': b.idtype,
                     'Αριθμός Εγγράφου': b.guestid,
+                    'Χώρα': b.country,
                     'Ημ. Άφιξης': b.checkindate,
+                    'Ώρα Άφιξης': b.ischeckinunknown ? 'Άγνωστη' : b.checkintime,
                     'Ημ. Αναχώρησης': b.checkoutdate,
-                    'Συνολικό Ποσό (€)': b.price
+                    'Ώρα Αναχώρησης': b.ischeckoutunknown ? 'Άγνωστη' : b.checkouttime,
+                    'Άτομα': b.pax,
+                    'Κατοικίδιο': b.pets ? 'Ναι' : 'Όχι',
+                    'Ποσό (€)': b.price,
+                    'ΑΑΔΕ': b.isaadecomplete ? 'Ναι' : 'Όχι',
+                    'Σημειώσεις': b.notes
                 }));
                 const worksheet = window.XLSX.utils.json_to_sheet(dataToExport);
                 const workbook = window.XLSX.utils.book_new();
                 window.XLSX.utils.book_append_sheet(workbook, worksheet, "Κρατήσεις");
-                window.XLSX.writeFile(workbook, "Airbnb_Kratiseis.xlsx");
+                window.XLSX.writeFile(workbook, "Airbnb_Kratiseis_Full.xlsx");
             };
 
-            // Φίλτρα Ημερομηνιών
             const todayStr = new Date().toISOString().split('T')[0];
             const currentBookings = bookings.filter(b => b.checkindate <= todayStr && b.checkoutdate >= todayStr);
             const upcomingBookings = bookings.filter(b => b.checkindate > todayStr);
             const pastBookings = bookings.filter(b => b.checkoutdate < todayStr);
 
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const startDay = firstDayIndex === 0 ? 6 : firstDayIndex - 1; 
+            
+            const calendarDays = [];
+            for(let i=0; i<startDay; i++) calendarDays.push(null);
+            for(let i=1; i<=daysInMonth; i++) calendarDays.push(i);
+
+            const getBookingsForDay = (day) => {
+                if(!day) return [];
+                const dateStr = `${year}-${String(month+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                return bookings.filter(b => b.checkindate <= dateStr && b.checkoutdate >= dateStr);
+            };
+
+            // ΕΜΦΑΝΙΣΗ ΚΑΡΤΑΣ ΜΕ ΟΛΑ ΤΑ ΣΤΟΙΧΕΙΑ
             const renderBookingsList = (list) => {
-                if(list.length === 0) return <p className="text-center text-gray-500 mt-10">Δεν βρέθηκαν κρατήσεις σε αυτή την κατηγορία.</p>;
+                if(list.length === 0) return <p className="text-center text-gray-500 mt-10">Δεν βρέθηκαν κρατήσεις.</p>;
                 return list.map(b => (
                     <div key={b.id} className="bg-white rounded-xl shadow-md mb-5 overflow-hidden border border-gray-200">
                         <div className={`text-white text-xs font-bold text-center p-1 tracking-wider flex justify-between px-3 ${b.checkindate <= todayStr && b.checkoutdate >= todayStr ? 'bg-green-600' : 'bg-gray-700'}`}>
                             <span>{b.checkindate <= todayStr && b.checkoutdate >= todayStr ? '🟢 ΤΡΕΧΟΥΣΑ ΔΙΑΜΟΝΗ' : 'ΕΠΙΒΕΒΑΙΩΜΕΝΗ ΚΡΑΤΗΣΗ'}</span>
-                            {b.isaadecomplete && <span className="text-green-300">✓ ΑΑΔΕ OK</span>}
+                            {b.isaadecomplete ? <span className="text-green-300">✓ ΑΑΔΕ OK</span> : <span className="text-red-300">⚠️ ΕΚΚΡΕΜΕΙ ΑΑΔΕ</span>}
                         </div>
                         <div className="p-4">
+                            {/* Ημερομηνίες και Ώρες */}
                             <div className="flex border-b border-gray-100 pb-3 mb-3">
                                 <div className="flex-1 text-center border-r border-gray-100">
                                     <div className="text-xs text-gray-400 font-bold">ΑΦΙΞΗ</div>
-                                    <div className="text-lg font-black text-green-700">{b.checkindate || '-'}</div>
+                                    <div className="text-base font-black text-green-700">{b.checkindate || '-'}</div>
+                                    <div className="text-xs text-gray-500 font-bold">🕒 Ώρα: {b.ischeckinunknown ? 'Άγνωστη' : (b.checkintime || '-')}</div>
                                 </div>
                                 <div className="flex-1 text-center">
                                     <div className="text-xs text-gray-400 font-bold">ΑΝΑΧΩΡΗΣΗ</div>
-                                    <div className="text-lg font-black text-red-700">{b.checkoutdate || '-'}</div>
+                                    <div className="text-base font-black text-red-700">{b.checkoutdate || '-'}</div>
+                                    <div className="text-xs text-gray-500 font-bold">🕒 Ώρα: {b.ischeckoutunknown ? 'Άγνωστη' : (b.checkouttime || '-')}</div>
                                 </div>
                             </div>
+                            
+                            {/* Στοιχεία Φιλοξενούμενου */}
                             <div className="mb-3">
-                                <div className="font-bold text-lg text-gray-800">👤 {b.guestname}</div>
-                                <div className="text-sm text-gray-500 mt-1 flex justify-between items-center">
-                                    <span>📄 {b.idtype}: {b.guestid || <span className="text-red-500 font-bold">ΕΚΚΡΕΜΕΙ</span>}</span>
-                                    {role === 'staff' && !b.guestid && (
-                                        <button onClick={()=>openEditForm(b)} className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Προσθήκη Εγγράφου</button>
-                                    )}
+                                <div className="font-bold text-xl text-gray-800">👤 {b.guestname}</div>
+                                <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded border border-gray-100 space-y-1">
+                                    <div><strong>📄 Έγγραφο:</strong> {b.idtype} - {b.guestid || <span className="text-red-500 font-bold">ΕΚΚΡΕΜΕΙ ΣΤΟ CHECK-IN</span>}</div>
+                                    <div><strong>🌍 Εθνικότητα / Χώρα:</strong> {b.country || '-'}</div>
                                 </div>
                             </div>
-                            <div className="mt-3 p-3 rounded flex justify-between items-center bg-gray-50 border border-gray-100">
-                                <span className="font-bold text-lg text-gray-700">💶 {b.price} €</span>
+
+                            {/* Άτομα & Κατοικίδια */}
+                            <div className="flex justify-between p-2 rounded items-center bg-blue-50/50 mb-3 border border-blue-100/40">
+                                <span className="font-bold text-gray-700 text-sm">👥 {b.pax} Άτομα</span>
+                                {b.pets ? <span className="text-xs font-bold px-2 py-1 rounded bg-orange-100 text-orange-700">🐶 Έχει Κατοικίδιο</span> : <span className="text-xs text-gray-400">Χωρίς κατοικίδιο</span>}
+                            </div>
+
+                            {/* Σημειώσεις */}
+                            {b.notes && (
+                                <div className="mb-3 p-2 bg-yellow-50 text-xs text-yellow-800 border border-yellow-200 rounded">
+                                    <strong>📝 Σημειώσεις:</strong> {b.notes}
+                                </div>
+                            )}
+
+                            {/* Οικονομικά & Ενέργειες */}
+                            <div className="mt-3 p-3 rounded flex justify-between items-center bg-green-50 border border-green-100">
+                                <span className="font-bold text-xl text-green-700">💶 {b.price} €</span>
                                 <div className="flex gap-4">
-                                    <button onClick={()=>openEditForm(b)} className="text-blue-500 text-2xl">✏️</button>
-                                    {role === 'admin' && <button onClick={()=>deleteBooking(b.id)} className="text-red-500 text-2xl">🗑️</button>}
+                                    <button onClick={()=>openEditForm(b)} className="text-blue-500 text-2xl" title="Επεξεργασία">✏️</button>
+                                    {role === 'admin' && <button onClick={()=>deleteBooking(b.id)} className="text-red-500 text-2xl" title="Διαγραφή">🗑️</button>}
                                 </div>
                             </div>
                         </div>
@@ -201,48 +267,87 @@
             }
 
             if (showForm) {
-                // ... (Η φόρμα παραμένει ίδια με πριν, αλλά το admin μόνο μπορεί να σώσει νέα, το staff μόνο edits) ...
                 return (
                     <div className="min-h-screen p-4 pb-20 bg-gray-100">
                         <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow">
                             <h2 className="text-xl font-bold text-blue-900 mb-4">{editingId ? '✏️ Επεξεργασία Κράτησης' : '📝 Νέα Κράτηση'}</h2>
-                            <label className="block text-sm font-bold text-gray-700 mt-3">Ονοματεπώνυμο *</label>
-                            <input className="w-full p-2 border border-gray-300 rounded mt-1" value={guestname} onChange={e=>setGuestname(e.target.value)} />
                             
-                            <div className="flex gap-2 mt-3 p-3 bg-yellow-50 rounded border border-yellow-200">
+                            <label className="block text-sm font-bold text-gray-700 mt-3">Ονοματεπώνυμο Φιλοξενούμενου *</label>
+                            <input className="w-full p-2 border border-gray-300 rounded mt-1" value={guestname} onChange={e=>setGuestname(e.target.value)} placeholder="π.χ. John Doe" />
+                            
+                            <div className="flex gap-2 mt-3">
                                 <div className="w-1/3">
-                                    <label className="block text-xs font-bold text-gray-700">Έγγραφο</label>
-                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" value={idtype} onChange={e=>setIdtype(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700">Τύπος Εγγράφου</label>
+                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" value={idtype} onChange={e=>setIdtype(e.target.value)} placeholder="ΑΦΜ/Διαβατήριο" />
                                 </div>
                                 <div className="w-2/3">
-                                    <label className="block text-xs font-bold text-red-600">Αριθμός (Check-in) *</label>
-                                    <input className="w-full p-2 border border-red-300 rounded mt-1 bg-white" placeholder="Προσθήκη Αριθμού" value={guestid} onChange={e=>setGuestid(e.target.value)} />
+                                    <label className="block text-sm font-bold text-gray-700">Αριθμός Εγγράφου</label>
+                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" value={guestid} onChange={e=>setGuestid(e.target.value)} placeholder="Αριθμός εγγράφου" />
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 mt-3">
-                                <div className="w-1/2">
-                                    <label className="block text-sm font-bold text-gray-700">Ημ. Άφιξης *</label>
-                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" type="date" value={checkindate} onChange={e=>setCheckindate(e.target.value)} />
-                                </div>
-                                <div className="w-1/2">
-                                    <label className="block text-sm font-bold text-gray-700">Ημ. Αναχώρησης *</label>
-                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" type="date" value={checkoutdate} onChange={e=>setCheckoutdate(e.target.value)} />
-                                </div>
+                            <label className="block text-sm font-bold text-gray-700 mt-3">Εθνικότητα / Χώρα</label>
+                            <input className="w-full p-2 border border-gray-300 rounded mt-1" value={country} onChange={e=>setCountry(e.target.value)} placeholder="π.χ. Αγγλία" />
+
+                            <hr className="my-4 border-gray-200" />
+
+                            {/* ΑΦΙΞΗ ΠΛΗΡΕΣ */}
+                            <label className="block text-sm font-bold text-gray-700">Ημερομηνία Άφιξης *</label>
+                            <input className="w-full p-2 border border-gray-300 rounded mt-1" type="date" value={checkindate} onChange={e=>setCheckindate(e.target.value)} />
+                            <div className="flex items-center gap-2 mt-2 mb-2 p-2 bg-blue-50 rounded">
+                                <input type="checkbox" id="unkIn" checked={ischeckinunknown} onChange={e=>setIscheckinunknown(e.target.checked)} className="w-4 h-4"/>
+                                <label htmlFor="unkIn" className="text-xs font-bold text-blue-900">Δεν γνωρίζουμε ακόμα ώρα άφιξης</label>
                             </div>
+                            {!ischeckinunknown && (
+                                <div className="mb-2">
+                                    <label className="block text-xs font-bold text-gray-600">Ώρα Άφιξης</label>
+                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" type="time" value={checkintime} onChange={e=>setCheckintime(e.target.value)} />
+                                </div>
+                            )}
+
+                            <hr className="my-4 border-gray-200" />
+
+                            {/* ΑΝΑΧΩΡΗΣΗ ΠΛΗΡΕΣ */}
+                            <label className="block text-sm font-bold text-gray-700">Ημερομηνία Αναχώρησης *</label>
+                            <input className="w-full p-2 border border-gray-300 rounded mt-1" type="date" value={checkoutdate} onChange={e=>setCheckoutdate(e.target.value)} />
+                            <div className="flex items-center gap-2 mt-2 mb-2 p-2 bg-blue-50 rounded">
+                                <input type="checkbox" id="unkOut" checked={ischeckoutunknown} onChange={e=>setIscheckoutunknown(e.target.checked)} className="w-4 h-4"/>
+                                <label htmlFor="unkOut" className="text-xs font-bold text-blue-900">Δεν γνωρίζουμε ακόμα ώρα αναχώρησης</label>
+                            </div>
+                            {!ischeckoutunknown && (
+                                <div className="mb-2">
+                                    <label className="block text-xs font-bold text-gray-600">Ώρα Αναχώρησης</label>
+                                    <input className="w-full p-2 border border-gray-300 rounded mt-1" type="time" value={checkouttime} onChange={e=>setCheckouttime(e.target.value)} />
+                                </div>
+                            )}
+
+                            <hr className="my-4 border-gray-200" />
                             
-                            <div className="flex gap-2 mt-3">
+                            <div className="flex gap-2">
                                 <div className="w-1/2">
-                                    <label className="block text-sm font-bold text-gray-700">Ποσό (€)</label>
+                                    <label className="block text-sm font-bold text-gray-700">Συνολικό Ποσό (€)</label>
                                     <input className="w-full p-2 border border-gray-300 rounded mt-1" type="number" value={price} onChange={e=>setPrice(e.target.value)} />
                                 </div>
                                 <div className="w-1/2">
-                                    <label className="block text-sm font-bold text-gray-700">Άτομα</label>
+                                    <label className="block text-sm font-bold text-gray-700">Αριθμός Ατόμων</label>
                                     <input className="w-full p-2 border border-gray-300 rounded mt-1" type="number" value={pax} onChange={e=>setPax(e.target.value)} />
                                 </div>
                             </div>
 
-                            <button className="w-full bg-blue-600 text-white font-bold p-3 rounded mt-6" onClick={saveBooking}>💾 {editingId ? 'Αποθήκευση Αλλαγών' : 'Καταχώρηση Κράτησης'}</button>
+                            <div className="flex items-center gap-2 mt-4 bg-gray-50 p-2 rounded">
+                                <input type="checkbox" id="pets" checked={pets} onChange={e=>setPets(e.target.checked)} className="w-4 h-4"/>
+                                <label htmlFor="pets" className="text-sm font-bold text-gray-700">Υπάρχει Κατοικίδιο (🐶)</label>
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-2 bg-gray-50 p-2 rounded">
+                                <input type="checkbox" id="aade" checked={isaadecomplete} onChange={e=>setIsaadecomplete(e.target.checked)} className="w-4 h-4"/>
+                                <label htmlFor="aade" className="text-sm font-bold text-gray-700">Καταχωρήθηκε στην ΑΑΔΕ (✓)</label>
+                            </div>
+
+                            <label className="block text-sm font-bold text-gray-700 mt-3">Σημειώσεις</label>
+                            <textarea className="w-full p-2 border border-gray-300 rounded mt-1" rows="3" value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Επιπλέον πληροφορίες..."></textarea>
+
+                            <button className="w-full bg-blue-600 text-white font-bold p-3 rounded mt-6" onClick={saveBooking}>💾 Αποθήκευση Κράτησης</button>
                             <button className="w-full bg-gray-500 text-white font-bold p-3 rounded mt-2" onClick={()=>setShowForm(false)}>Ακύρωση</button>
                         </div>
                     </div>
@@ -252,33 +357,26 @@
             return (
                 <div className="min-h-screen bg-gray-100 pb-20">
                     <div className="p-4 text-white flex justify-between items-center bg-blue-900 shadow-md">
-                        <div className="font-bold text-lg">🏠 Airbnb Pro ({role})</div>
-                        <button className="bg-red-500 px-3 py-1 rounded font-bold text-white text-sm" onClick={()=>setAuthStep('LOGIN')}>Έξοδος</button>
+                        <div className="font-bold text-lg">🏠 Airbnb Pro</div>
+                        <div className="flex gap-4 items-center">
+                            <button onClick={()=>setActiveTab('settings')} className="text-2xl" title="Ρυθμίσεις">⚙️</button>
+                            <button className="bg-red-500 px-3 py-1 rounded font-bold text-white text-sm" onClick={()=>setAuthStep('LOGIN')}>Έξοδος</button>
+                        </div>
                     </div>
 
-                    {/* Tabs Navigation */}
-                    <div className="flex overflow-x-auto bg-white shadow-sm border-b border-gray-200 hide-scrollbar">
-                        <button onClick={()=>setActiveTab('current')} className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${activeTab==='current'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Τρέχουσες</button>
-                        <button onClick={()=>setActiveTab('upcoming')} className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${activeTab==='upcoming'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Επερχόμενες</button>
-                        <button onClick={()=>setActiveTab('past')} className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${activeTab==='past'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Προηγούμενες</button>
-                        <button onClick={()=>setActiveTab('calendar')} className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${activeTab==='calendar'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Ημερολόγιο</button>
-                        <button onClick={()=>setActiveTab('settings')} className={`px-4 py-3 text-sm font-bold whitespace-nowrap ${activeTab==='settings'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Ρυθμίσεις</button>
+                    <div className="flex overflow-x-auto bg-white shadow-sm border-b border-gray-200 hide-scrollbar justify-between">
+                        <button onClick={()=>setActiveTab('current')} className={`flex-1 px-2 py-3 text-sm font-bold whitespace-nowrap text-center ${activeTab==='current'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Τρέχουσες</button>
+                        <button onClick={()=>setActiveTab('upcoming')} className={`flex-1 px-2 py-3 text-sm font-bold whitespace-nowrap text-center ${activeTab==='upcoming'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Επερχόμενες</button>
+                        <button onClick={()=>setActiveTab('past')} className={`flex-1 px-2 py-3 text-sm font-bold whitespace-nowrap text-center ${activeTab==='past'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Προηγούμενες</button>
+                        <button onClick={()=>setActiveTab('calendar')} className={`flex-1 px-2 py-3 text-sm font-bold whitespace-nowrap text-center ${activeTab==='calendar'?'text-blue-600 border-b-2 border-blue-600':'text-gray-500'}`}>Ημερολόγιο</button>
                     </div>
 
                     <div className="p-4 max-w-md mx-auto">
                         
-                        {/* Admin Action Buttons */}
-                        {role === 'admin' && activeTab !== 'settings' && (
+                        {activeTab !== 'settings' && activeTab !== 'calendar' && (
                             <div className="mb-4 flex gap-2">
-                                <button className="flex-1 bg-blue-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={openNewForm}>➕ Νέα Κράτηση</button>
+                                {role === 'admin' && <button className="flex-1 bg-blue-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={openNewForm}>➕ Νέα Κράτηση</button>}
                                 <button className="flex-1 bg-green-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={exportToExcel}>📊 Εξαγωγή Excel</button>
-                            </div>
-                        )}
-
-                        {/* Staff Action Buttons */}
-                        {role === 'staff' && activeTab !== 'settings' && (
-                            <div className="mb-4">
-                                <button className="w-full bg-green-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={exportToExcel}>📊 Εξαγωγή Excel</button>
                             </div>
                         )}
 
@@ -286,25 +384,46 @@
                         {activeTab === 'upcoming' && renderBookingsList(upcomingBookings)}
                         {activeTab === 'past' && renderBookingsList(pastBookings)}
 
+                        {/* ΗΜΕΡΟΛΟΓΙΟ GRID */}
                         {activeTab === 'calendar' && (
                             <div className="bg-white rounded-xl shadow-md p-4">
-                                <h3 className="font-bold text-gray-700 mb-4 border-b pb-2">Όλες οι Κρατήσεις (Βάσει Άφιξης)</h3>
-                                {bookings.map(b => (
-                                    <div key={b.id} className="flex justify-between items-center py-2 border-b border-gray-100">
-                                        <div>
-                                            <div className="font-bold text-sm">{b.guestname}</div>
-                                            <div className="text-xs text-gray-500">{b.checkindate} έως {b.checkoutdate}</div>
-                                        </div>
-                                        <div className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded">{b.price}€</div>
-                                    </div>
-                                ))}
+                                <div className="flex justify-between items-center mb-4 bg-gray-50 p-2 rounded">
+                                    <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="text-xl px-2">⬅️</button>
+                                    <h3 className="font-bold text-lg text-blue-900">{MONTH_NAMES[month]} {year}</h3>
+                                    <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="text-xl px-2">➡️</button>
+                                </div>
+                                
+                                <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-500 mb-2">
+                                    <div>ΔΕ</div><div>ΤΡ</div><div>ΤΕ</div><div>ΠΕ</div><div>ΠΑ</div><div>ΣΑ</div><div>ΚΥ</div>
+                                </div>
+                                
+                                <div className="grid grid-cols-7 gap-1">
+                                    {calendarDays.map((day, index) => {
+                                        const dayBookings = getBookingsForDay(day);
+                                        const isBooked = dayBookings.length > 0;
+                                        const todayCheck = new Date();
+                                        const isToday = day === todayCheck.getDate() && month === todayCheck.getMonth() && year === todayCheck.getFullYear();
+                                        
+                                        return (
+                                            <div key={index} className={`h-14 border rounded p-1 flex flex-col justify-start items-center relative ${isBooked ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'} ${isToday ? 'ring-2 ring-red-400' : ''}`}>
+                                                <span className={`text-xs ${isToday ? 'text-red-500 font-black' : 'text-gray-700'}`}>{day || ''}</span>
+                                                {isBooked && (
+                                                    <div className="text-[9px] text-white bg-blue-600 rounded px-1 leading-tight truncate w-full text-center mt-1 font-bold">
+                                                        {dayBookings.length > 1 ? '🔄 Αλλαγή' : dayBookings[0].guestname.split(' ')[0]}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
                             </div>
                         )}
 
+                        {/* ΡΥΘΜΙΣΕΙΣ ΓΡΑΝΑΖΙ */}
                         {activeTab === 'settings' && (
                             <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                                <h3 className="font-bold text-lg text-gray-800 mb-4">Αλλαγή Κωδικών ({role})</h3>
-                                <p className="text-xs text-gray-500 mb-4">Τα στοιχεία θα αλλάξουν μόνο για τη δική σας συσκευή.</p>
+                                <h3 className="font-bold text-lg text-gray-800 mb-4">⚙️ Ρυθμίσεις ({role})</h3>
+                                <p className="text-xs text-gray-500 mb-4">Αλλαγή στοιχείων σύνδεσης (Αποθηκεύονται μόνο στη δική σας συσκευή).</p>
                                 
                                 <label className="block text-sm font-bold text-gray-700 mt-3">Νέο Όνομα Χρήστη</label>
                                 <input id="newU" className="w-full p-2 border border-gray-300 rounded mt-1" defaultValue={role === 'admin' ? adminCreds.u : staffCreds.u} />
