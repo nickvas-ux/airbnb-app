@@ -25,6 +25,21 @@
 
         const MONTH_NAMES = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 
+        // Συνάρτηση "έξυπνης" εξομάλυνσης εθνικότητας (βγάζει τόνους, μικρά, κενά)
+        const normalizeCountry = (c) => {
+            if (!c) return 'ΑΓΝΩΣΤΗ';
+            return c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+        };
+
+        // Υπολογισμός πραγματικών νυχτών
+        const getNights = (inDate, outDate) => {
+            if (!inDate || !outDate) return 0;
+            const d1 = new Date(inDate);
+            const d2 = new Date(outDate);
+            const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+            return diff > 0 ? diff : 1; // Τουλάχιστον 1 νύχτα αν βάλουν ίδια μέρα
+        };
+
         function App() {
             const [authStep, setAuthStep] = useState('LOGIN');
             const [role, setRole] = useState(null);
@@ -34,6 +49,7 @@
             const [activeTab, setActiveTab] = useState('upcoming'); 
             
             const [currentDate, setCurrentDate] = useState(new Date());
+            const [statsMonth, setStatsMonth] = useState('ALL'); // 'ALL' ή 0-11
             
             const [adminCreds, setAdminCreds] = useState(() => JSON.parse(localStorage.getItem('adminCreds')) || { u: 'admin', p: 'admin' });
             const [staffCreds, setStaffCreds] = useState(() => JSON.parse(localStorage.getItem('staffCreds')) || { u: 'staff', p: 'staff' });
@@ -41,6 +57,7 @@
             const [showForm, setShowForm] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [guestname, setGuestname] = useState('');
+            const [phone, setPhone] = useState('');
             const [idtype, setIdtype] = useState('ΑΦΜ');
             const [guestid, setGuestid] = useState('');
             const [country, setCountry] = useState('Ελλάδα');
@@ -56,7 +73,6 @@
             const [notes, setNotes] = useState('');
             const [isaadecomplete, setIsaadecomplete] = useState(false);
 
-            // Modals States
             const [selectedCalendarBooking, setSelectedCalendarBooking] = useState(null);
             const [quickCheckInBooking, setQuickCheckInBooking] = useState(null);
             const [quickId, setQuickId] = useState('');
@@ -81,21 +97,10 @@
                 }
             };
 
-            const handleUpdateCreds = (newU, newP) => {
-                if(!newU || !newP) return alert("Συμπληρώστε και τα δύο πεδία.");
-                const newCreds = {u: newU, p: newP};
-                if(role === 'admin') {
-                    setAdminCreds(newCreds); localStorage.setItem('adminCreds', JSON.stringify(newCreds));
-                } else {
-                    setStaffCreds(newCreds); localStorage.setItem('staffCreds', JSON.stringify(newCreds));
-                }
-                alert("Τα στοιχεία σύνδεσης ενημερώθηκαν επιτυχώς!");
-            };
-
             const saveBooking = () => {
                 if (!guestname || !checkindate || !checkoutdate) return alert("Το Όνομα, η Άφιξη και η Αναχώρηση είναι υποχρεωτικά.");
                 const bookingData = {
-                    guestname, idtype, guestid, country, checkindate, checkintime: ischeckinunknown ? null : checkintime,
+                    guestname, phone, idtype, guestid, country, checkindate, checkintime: ischeckinunknown ? null : checkintime,
                     ischeckinunknown, checkoutdate, checkouttime: ischeckoutunknown ? null : checkouttime, ischeckoutunknown,
                     price: Number(price) || 0, pax: Number(pax) || 2, pets, notes, isaadecomplete
                 };
@@ -122,9 +127,9 @@
 
             const exportToExcel = () => {
                 const dataToExport = bookings.map(b => ({
-                    'Ονοματεπώνυμο': b.guestname, 'Τύπος Εγγράφου': b.idtype, 'Αριθμός Εγγράφου': b.guestid,
+                    'Ονοματεπώνυμο': b.guestname, 'Τηλέφωνο': b.phone || '', 'Τύπος Εγγράφου': b.idtype, 'Αριθμός Εγγράφου': b.guestid,
                     'Χώρα': b.country, 'Ημ. Άφιξης': b.checkindate, 'Ημ. Αναχώρησης': b.checkoutdate,
-                    'Ποσό (€)': b.price, 'Άτομα': b.pax, 'Κατοικίδιο': b.pets ? 'Ναι':'Όχι'
+                    'Ποσό (€)': b.price, 'Άτομα': b.pax, 'Κατοικίδιο': b.pets ? 'Ναι':'Όχι', 'Σημειώσεις': b.notes
                 }));
                 const ws = window.XLSX.utils.json_to_sheet(dataToExport);
                 const wb = window.XLSX.utils.book_new();
@@ -133,7 +138,7 @@
             };
 
             const openEditForm = (b) => {
-                setEditingId(b.id); setGuestname(b.guestname || ''); setIdtype(b.idtype || 'ΑΦΜ'); setGuestid(b.guestid || ''); setCountry(b.country || 'Ελλάδα');
+                setEditingId(b.id); setGuestname(b.guestname || ''); setPhone(b.phone || ''); setIdtype(b.idtype || 'ΑΦΜ'); setGuestid(b.guestid || ''); setCountry(b.country || 'Ελλάδα');
                 setCheckindate(b.checkindate || ''); setCheckintime(b.checkintime || ''); setIscheckinunknown(b.ischeckinunknown !== undefined ? b.ischeckinunknown : true);
                 setCheckoutdate(b.checkoutdate || ''); setCheckouttime(b.checkouttime || ''); setIscheckoutunknown(b.ischeckoutunknown !== undefined ? b.ischeckoutunknown : true);
                 setPrice(b.price || ''); setPax(b.pax || '2'); setPets(b.pets || false); setNotes(b.notes || ''); setIsaadecomplete(b.isaadecomplete || false);
@@ -144,12 +149,6 @@
             const currentBookings = bookings.filter(b => b.checkindate <= todayStr && b.checkoutdate >= todayStr);
             const upcomingBookings = bookings.filter(b => b.checkindate > todayStr);
             const pastBookings = bookings.filter(b => b.checkoutdate < todayStr);
-
-            // Βοηθητική για υπολογισμό διανυκτερεύσεων
-            const getNights = (inDate, outDate) => {
-                const diff = new Date(outDate) - new Date(inDate);
-                return diff > 0 ? diff / (1000 * 60 * 60 * 24) : 0;
-            };
 
             const renderBookingsList = (list) => {
                 if(list.length === 0) return <p className="text-center text-gray-500 mt-10">Δεν βρέθηκαν κρατήσεις.</p>;
@@ -174,6 +173,7 @@
                             </div>
                             <div className="mb-3">
                                 <div className="font-bold text-xl text-gray-800">👤 {b.guestname}</div>
+                                {b.phone && <div className="text-sm font-bold text-blue-600 mt-1">📞 {b.phone}</div>}
                                 <div className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded">
                                     <div className="flex justify-between items-center">
                                         <span><strong>📄 {b.idtype}:</strong> {b.guestid || <span className="text-red-500 font-bold">ΕΚΚΡΕΜΕΙ</span>}</span>
@@ -200,63 +200,79 @@
             };
 
             const renderStats = () => {
-                const yearBookings = bookings.filter(b => b.checkindate.startsWith(currentDate.getFullYear().toString()));
+                // Φιλτράρισμα βάσει Έτους και επιλεγμένου Μήνα (η άφιξη καθορίζει τον μήνα)
+                const filteredBookings = bookings.filter(b => {
+                    const d = new Date(b.checkindate);
+                    if (d.getFullYear() !== currentDate.getFullYear()) return false;
+                    if (statsMonth !== 'ALL' && d.getMonth() !== parseInt(statsMonth)) return false;
+                    return true;
+                });
+
                 let totalRev = 0; let totalNights = 0; let totalPax = 0; let petsCount = 0; let pax2 = 0; let pax3 = 0;
                 let nationalities = {};
                 
-                yearBookings.forEach(b => {
+                filteredBookings.forEach(b => {
                     totalRev += b.price;
                     totalPax += b.pax;
                     if(b.pets) petsCount++;
                     if(b.pax === 2) pax2++;
-                    if(b.pax === 3) pax3++;
+                    if(b.pax >= 3) pax3++; // 3 ή περισσότερα
+                    
                     const n = getNights(b.checkindate, b.checkoutdate);
                     totalNights += n;
-                    nationalities[b.country] = (nationalities[b.country] || 0) + 1;
+                    
+                    const cNorm = normalizeCountry(b.country);
+                    nationalities[cNorm] = (nationalities[cNorm] || 0) + 1;
                 });
 
                 const avgNightRate = totalNights > 0 ? (totalRev / totalNights).toFixed(2) : 0;
-                const totalDaysInYear = 365;
-                const occRateYear = ((totalNights / totalDaysInYear) * 100).toFixed(1);
+                const daysInPeriod = statsMonth === 'ALL' ? 365 : new Date(currentDate.getFullYear(), parseInt(statsMonth) + 1, 0).getDate();
+                const occRate = ((totalNights / daysInPeriod) * 100).toFixed(1);
 
                 return (
                     <div className="bg-white rounded-xl shadow-md p-4 space-y-4">
                         <div className="flex justify-between items-center mb-2">
                             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))} className="text-xl">⬅️</button>
-                            <h3 className="font-bold text-xl text-blue-900">Στατιστικά {currentDate.getFullYear()}</h3>
+                            <h3 className="font-bold text-xl text-blue-900">Έτος {currentDate.getFullYear()}</h3>
                             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))} className="text-xl">➡️</button>
                         </div>
 
+                        {/* Επιλογή Μήνα */}
+                        <select className="w-full p-2 border border-blue-300 rounded bg-blue-50 font-bold text-blue-900 mb-2" value={statsMonth} onChange={e=>setStatsMonth(e.target.value)}>
+                            <option value="ALL">Συνολικά Έτους</option>
+                            {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                        </select>
+
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-green-50 p-3 rounded border border-green-100 text-center">
-                                <div className="text-xs text-gray-500 font-bold">ΣΥΝΟΛΙΚΑ ΕΣΟΔΑ</div>
+                                <div className="text-[10px] text-gray-500 font-bold">ΣΥΝΟΛΙΚΑ ΕΣΟΔΑ</div>
                                 <div className="text-xl font-black text-green-700">€{totalRev}</div>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100 text-center">
-                                <div className="text-xs text-gray-500 font-bold">ΜΕΣΗ ΤΙΜΗ / ΒΡΑΔΥ</div>
+                                <div className="text-[10px] text-gray-500 font-bold">ΜΕΣΗ ΤΙΜΗ / ΒΡΑΔΥ</div>
                                 <div className="text-xl font-black text-blue-700">€{avgNightRate}</div>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-gray-50 p-3 rounded border border-gray-200 text-center">
-                                <div className="text-xs text-gray-500 font-bold">ΚΡΑΤΗΣΕΙΣ</div>
-                                <div className="text-xl font-black text-gray-700">{yearBookings.length}</div>
+                                <div className="text-[10px] text-gray-500 font-bold">ΚΡΑΤΗΣΕΙΣ</div>
+                                <div className="text-xl font-black text-gray-700">{filteredBookings.length}</div>
                             </div>
                             <div className="bg-gray-50 p-3 rounded border border-gray-200 text-center">
-                                <div className="text-xs text-gray-500 font-bold">ΕΠΙΣΚΕΠΤΕΣ (PAX)</div>
+                                <div className="text-[10px] text-gray-500 font-bold">ΕΠΙΣΚΕΠΤΕΣ (PAX)</div>
                                 <div className="text-xl font-black text-gray-700">{totalPax}</div>
                             </div>
                         </div>
 
                         <div className="bg-yellow-50 p-3 rounded border border-yellow-100 flex justify-between items-center">
-                            <div className="text-sm"><strong>Πληρότητα Έτους:</strong> {totalNights} μέρες</div>
-                            <div className="font-bold text-yellow-800">{occRateYear}%</div>
+                            <div className="text-sm"><strong>Ενοικιασμένες Νύχτες:</strong> {totalNights}</div>
+                            <div className="font-bold text-yellow-800">Πληρότητα: {Math.min(occRate, 100)}%</div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div className="bg-white border rounded p-2"><div className="text-xs text-gray-400">2 Άτομα</div><div className="font-bold">{pax2}</div></div>
-                            <div className="bg-white border rounded p-2"><div className="text-xs text-gray-400">3 Άτομα</div><div className="font-bold">{pax3}</div></div>
+                            <div className="bg-white border rounded p-2"><div className="text-xs text-gray-400">3+ Άτομα</div><div className="font-bold">{pax3}</div></div>
                             <div className="bg-white border rounded p-2"><div className="text-xs text-gray-400">Κατοικίδια</div><div className="font-bold">{petsCount}</div></div>
                         </div>
 
@@ -264,7 +280,7 @@
                             <h4 className="font-bold text-sm text-gray-700 mb-2 border-b pb-1">Εθνικότητες</h4>
                             <div className="flex flex-wrap gap-2">
                                 {Object.keys(nationalities).length > 0 ? Object.entries(nationalities).map(([c, count]) => (
-                                    <span key={c} className="bg-gray-100 text-xs font-bold px-2 py-1 rounded">{c || 'Άγνωστη'}: {count}</span>
+                                    <span key={c} className="bg-gray-100 text-xs font-bold px-2 py-1 rounded border border-gray-200">{c}: {count}</span>
                                 )) : <span className="text-xs text-gray-400">Δεν υπάρχουν δεδομένα</span>}
                             </div>
                         </div>
@@ -297,13 +313,18 @@
                     <div className="min-h-screen p-4 pb-20 bg-gray-100">
                         <div className="max-w-md mx-auto bg-white p-6 rounded-xl shadow">
                             <h2 className="text-xl font-bold text-blue-900 mb-4">{editingId ? '✏️ Επεξεργασία' : '📝 Νέα Κράτηση'}</h2>
+                            
                             <label className="block text-sm font-bold mt-3">Ονοματεπώνυμο *</label>
                             <input className="w-full p-2 border rounded mt-1" value={guestname} onChange={e=>setGuestname(e.target.value)} />
+                            
+                            <label className="block text-sm font-bold mt-3">Τηλέφωνο Επικοινωνίας</label>
+                            <input className="w-full p-2 border rounded mt-1" type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+30 69..." />
+
                             <div className="flex gap-2 mt-3">
                                 <div className="w-1/3"><label className="block text-sm font-bold">Έγγραφο</label><input className="w-full p-2 border rounded mt-1" value={idtype} onChange={e=>setIdtype(e.target.value)} /></div>
                                 <div className="w-2/3"><label className="block text-sm font-bold">Αριθμός</label><input className="w-full p-2 border rounded mt-1" value={guestid} onChange={e=>setGuestid(e.target.value)} /></div>
                             </div>
-                            <label className="block text-sm font-bold mt-3">Χώρα</label>
+                            <label className="block text-sm font-bold mt-3">Χώρα / Εθνικότητα</label>
                             <input className="w-full p-2 border rounded mt-1" value={country} onChange={e=>setCountry(e.target.value)} />
                             
                             <hr className="my-4" />
@@ -356,7 +377,7 @@
                         
                         {['current', 'upcoming', 'past'].includes(activeTab) && (
                             <div className="mb-4 flex gap-2">
-                                {role === 'admin' && <button className="flex-1 bg-blue-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={()=>{setEditingId(null); setShowForm(true);}}>➕ Νέα</button>}
+                                {role === 'admin' && <button className="flex-1 bg-blue-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={()=>{setEditingId(null); setPhone(''); setShowForm(true);}}>➕ Νέα</button>}
                                 <button className="flex-1 bg-green-600 text-white font-bold p-3 rounded-lg shadow-md" onClick={exportToExcel}>📊 Excel</button>
                             </div>
                         )}
@@ -413,9 +434,10 @@
                             </div>
                         )}
 
+                        {/* ΡΥΘΜΙΣΕΙΣ */}
                         {activeTab === 'settings' && (
                             <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                                <h3 className="font-bold text-lg mb-4">⚙️ Ρυθμίσεις</h3>
+                                <h3 className="font-bold text-lg mb-4">⚙️ Ρυθμίσεις ({role})</h3>
                                 <label className="block text-sm font-bold mt-3">Νέο Όνομα</label><input id="newU" className="w-full p-2 border rounded mt-1" defaultValue={role === 'admin' ? adminCreds.u : staffCreds.u} />
                                 <label className="block text-sm font-bold mt-3">Νέος Κωδικός</label><input id="newP" type="password" className="w-full p-2 border rounded mt-1" defaultValue={role === 'admin' ? adminCreds.p : staffCreds.p} />
                                 <button className="w-full bg-blue-800 text-white font-bold p-3 rounded mt-6" onClick={() => handleUpdateCreds(document.getElementById('newU').value, document.getElementById('newP').value)}>Αποθήκευση</button>
@@ -423,18 +445,42 @@
                         )}
                     </div>
 
-                    {/* MODAL: Calendar Info */}
+                    {/* MODAL: ΠΛΗΡΕΙΣ ΠΛΗΡΟΦΟΡΙΕΣ ΗΜΕΡΟΛΟΓΙΟΥ */}
                     {selectedCalendarBooking && (
                         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div className="bg-white p-5 rounded-xl w-full max-w-sm">
+                            <div className="bg-white p-5 rounded-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
                                 <h3 className="font-bold text-lg text-blue-900 border-b pb-2 mb-3">Λεπτομέρειες Κράτησης</h3>
-                                <p><strong>👤 Πελάτης:</strong> {selectedCalendarBooking.guestname}</p>
-                                <p className="mt-1"><strong>🟢 Άφιξη:</strong> {selectedCalendarBooking.checkindate}</p>
-                                <p className="mt-1"><strong>🔴 Αναχώρηση:</strong> {selectedCalendarBooking.checkoutdate}</p>
-                                <p className="mt-1"><strong>💶 Ποσό:</strong> {selectedCalendarBooking.price}€</p>
+                                
+                                <div className="space-y-2 text-sm text-gray-800">
+                                    <p className="text-lg font-bold">👤 {selectedCalendarBooking.guestname}</p>
+                                    {selectedCalendarBooking.phone && <p className="font-bold text-blue-600">📞 {selectedCalendarBooking.phone}</p>}
+                                    
+                                    <div className="bg-gray-50 p-2 rounded border border-gray-100">
+                                        <p><strong>🌍 Χώρα:</strong> {selectedCalendarBooking.country || '-'}</p>
+                                        <p><strong>📄 {selectedCalendarBooking.idtype}:</strong> {selectedCalendarBooking.guestid || 'Εκκρεμεί'}</p>
+                                    </div>
+
+                                    <div className="flex justify-between">
+                                        <div className="bg-green-50 p-2 rounded border border-green-100 flex-1 mr-1">
+                                            <strong>🟢 Άφιξη</strong><br/>
+                                            {selectedCalendarBooking.checkindate}<br/>
+                                            <span className="text-xs text-gray-500">{selectedCalendarBooking.ischeckinunknown ? 'Άγνωστη ώρα' : selectedCalendarBooking.checkintime}</span>
+                                        </div>
+                                        <div className="bg-red-50 p-2 rounded border border-red-100 flex-1 ml-1">
+                                            <strong>🔴 Αναχώρηση</strong><br/>
+                                            {selectedCalendarBooking.checkoutdate}<br/>
+                                            <span className="text-xs text-gray-500">{selectedCalendarBooking.ischeckoutunknown ? 'Άγνωστη ώρα' : selectedCalendarBooking.checkouttime}</span>
+                                        </div>
+                                    </div>
+
+                                    <p className="bg-blue-50 p-2 rounded"><strong>👥 Άτομα:</strong> {selectedCalendarBooking.pax} {selectedCalendarBooking.pets && ' (+ Κατοικίδιο 🐶)'}</p>
+                                    <p className="text-xl font-bold text-green-700 bg-green-100 p-2 rounded text-center">💶 {selectedCalendarBooking.price}€</p>
+                                    {selectedCalendarBooking.notes && <p className="bg-yellow-50 p-2 rounded text-yellow-800"><strong>📝 Σημειώσεις:</strong> {selectedCalendarBooking.notes}</p>}
+                                </div>
+
                                 <div className="mt-5 flex gap-2">
-                                    <button className="flex-1 bg-blue-600 text-white p-2 rounded font-bold" onClick={()=>{openEditForm(selectedCalendarBooking); setSelectedCalendarBooking(null);}}>Επεξεργασία</button>
-                                    <button className="flex-1 bg-gray-300 text-gray-800 p-2 rounded font-bold" onClick={()=>setSelectedCalendarBooking(null)}>Κλείσιμο</button>
+                                    <button className="flex-1 bg-blue-600 text-white p-3 rounded font-bold shadow-md" onClick={()=>{openEditForm(selectedCalendarBooking); setSelectedCalendarBooking(null);}}>Επεξεργασία</button>
+                                    <button className="flex-1 bg-gray-300 text-gray-800 p-3 rounded font-bold shadow-md" onClick={()=>setSelectedCalendarBooking(null)}>Κλείσιμο</button>
                                 </div>
                             </div>
                         </div>
