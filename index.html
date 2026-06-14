@@ -41,7 +41,7 @@
         function App() {
             const [authStep, setAuthStep] = useState('LOGIN');
             const [role, setRole] = useState(null);
-            const [currentUser, setCurrentUser] = useState(null); // Κρατάει τα στοιχεία του συνδεδεμένου χρήστη από τη βάση
+            const [currentUser, setCurrentUser] = useState(null); 
             const [bookings, setBookings] = useState([]);
             
             const [username, setUsername] = useState('');
@@ -82,7 +82,6 @@
                 .catch(err => console.log("Σφάλμα ανάγνωσης"));
             };
 
-            // ΝΕΟ: Login κεντρικά από τη βάση δεδομένων
             const handleLogin = () => {
                 const u = username.trim();
                 const p = password.trim();
@@ -104,7 +103,6 @@
                 .catch(err => alert("Αποτυχία δικτύου. Ελέγξτε τη σύνδεσή σας."));
             };
 
-            // ΝΕΟ: Ενημέρωση κωδικού κατευθείαν στο Supabase
             const handleUpdateCreds = (newU, newP) => {
                 if(!newU || !newP) return alert("Συμπληρώστε και τα δύο πεδία.");
                 
@@ -234,11 +232,11 @@
                 let nationalities = {};
                 
                 filteredBookings.forEach(b => {
-                    totalRev += b.price;
-                    totalPax += b.pax;
+                    totalRev += (Number(b.price) || 0);
+                    totalPax += (Number(b.pax) || 0);
                     if(b.pets) petsCount++;
-                    if(b.pax === 2) pax2++;
-                    if(b.pax >= 3) pax3++; 
+                    if(Number(b.pax) === 2) pax2++;
+                    if(Number(b.pax) >= 3) pax3++; 
                     
                     const n = getNights(b.checkindate, b.checkoutdate);
                     totalNights += n;
@@ -267,7 +265,7 @@
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-green-50 p-3 rounded border border-green-100 text-center">
                                 <div className="text-[10px] text-gray-500 font-bold">ΣΥΝΟΛΙΚΑ ΕΣΟΔΑ</div>
-                                <div className="text-xl font-black text-green-700">€{totalRev}</div>
+                                <div className="text-xl font-black text-green-700">€{Number(totalRev.toFixed(2))}</div>
                             </div>
                             <div className="bg-blue-50 p-3 rounded border border-blue-100 text-center">
                                 <div className="text-[10px] text-gray-500 font-bold">ΜΕΣΗ ΤΙΜΗ / ΒΡΑΔΥ</div>
