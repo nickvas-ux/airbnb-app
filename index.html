@@ -25,34 +25,31 @@
 
         const MONTH_NAMES = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 
-        // Συνάρτηση "έξυπνης" εξομάλυνσης εθνικότητας (βγάζει τόνους, μικρά, κενά)
         const normalizeCountry = (c) => {
             if (!c) return 'ΑΓΝΩΣΤΗ';
             return c.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
         };
 
-        // Υπολογισμός πραγματικών νυχτών
         const getNights = (inDate, outDate) => {
             if (!inDate || !outDate) return 0;
             const d1 = new Date(inDate);
             const d2 = new Date(outDate);
             const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
-            return diff > 0 ? diff : 1; // Τουλάχιστον 1 νύχτα αν βάλουν ίδια μέρα
+            return diff > 0 ? diff : 1; 
         };
 
         function App() {
             const [authStep, setAuthStep] = useState('LOGIN');
             const [role, setRole] = useState(null);
+            const [currentUser, setCurrentUser] = useState(null); // Κρατάει τα στοιχεία του συνδεδεμένου χρήστη από τη βάση
             const [bookings, setBookings] = useState([]);
+            
             const [username, setUsername] = useState('');
             const [password, setPassword] = useState('');
             const [activeTab, setActiveTab] = useState('upcoming'); 
             
             const [currentDate, setCurrentDate] = useState(new Date());
-            const [statsMonth, setStatsMonth] = useState('ALL'); // 'ALL' ή 0-11
-            
-            const [adminCreds, setAdminCreds] = useState(() => JSON.parse(localStorage.getItem('adminCreds')) || { u: 'admin', p: 'admin' });
-            const [staffCreds, setStaffCreds] = useState(() => JSON.parse(localStorage.getItem('staffCreds')) || { u: 'staff', p: 'staff' });
+            const [statsMonth, setStatsMonth] = useState('ALL'); 
 
             const [showForm, setShowForm] = useState(false);
             const [editingId, setEditingId] = useState(null);
@@ -85,16 +82,42 @@
                 .catch(err => console.log("Σφάλμα ανάγνωσης"));
             };
 
+            // ΝΕΟ: Login κεντρικά από τη βάση δεδομένων
             const handleLogin = () => {
                 const u = username.trim();
                 const p = password.trim();
-                if (u === adminCreds.u && p === adminCreds.p) {
-                    setRole('admin'); setAuthStep('APP'); fetchBookings();
-                } else if (u === staffCreds.u && p === staffCreds.p) {
-                    setRole('staff'); setAuthStep('APP'); fetchBookings();
-                } else {
-                    alert('Λάθος Στοιχεία.');
-                }
+                
+                supabaseClient.from('app_users').select('*').eq('username', u).eq('password', p)
+                .then(response => {
+                    if (response.error) {
+                        alert("Σφάλμα σύνδεσης με τη βάση.");
+                    } else if (response.data && response.data.length > 0) {
+                        const user = response.data[0];
+                        setRole(user.role);
+                        setCurrentUser(user);
+                        setAuthStep('APP');
+                        fetchBookings();
+                    } else {
+                        alert('Λάθος Όνομα Χρήστη ή Κωδικός!');
+                    }
+                })
+                .catch(err => alert("Αποτυχία δικτύου. Ελέγξτε τη σύνδεσή σας."));
+            };
+
+            // ΝΕΟ: Ενημέρωση κωδικού κατευθείαν στο Supabase
+            const handleUpdateCreds = (newU, newP) => {
+                if(!newU || !newP) return alert("Συμπληρώστε και τα δύο πεδία.");
+                
+                supabaseClient.from('app_users').update({ username: newU, password: newP }).eq('role', role)
+                .then(response => {
+                    if (!response.error) {
+                        setCurrentUser({ ...currentUser, username: newU, password: newP });
+                        alert("Επιτυχία! Τα στοιχεία άλλαξαν κεντρικά στο Cloud για όλους.");
+                    } else {
+                        alert("Σφάλμα: " + response.error.message);
+                    }
+                })
+                .catch(err => alert("Αποτυχία δικτύου"));
             };
 
             const saveBooking = () => {
@@ -200,7 +223,6 @@
             };
 
             const renderStats = () => {
-                // Φιλτράρισμα βάσει Έτους και επιλεγμένου Μήνα (η άφιξη καθορίζει τον μήνα)
                 const filteredBookings = bookings.filter(b => {
                     const d = new Date(b.checkindate);
                     if (d.getFullYear() !== currentDate.getFullYear()) return false;
@@ -216,7 +238,7 @@
                     totalPax += b.pax;
                     if(b.pets) petsCount++;
                     if(b.pax === 2) pax2++;
-                    if(b.pax >= 3) pax3++; // 3 ή περισσότερα
+                    if(b.pax >= 3) pax3++; 
                     
                     const n = getNights(b.checkindate, b.checkoutdate);
                     totalNights += n;
@@ -237,7 +259,6 @@
                             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))} className="text-xl">➡️</button>
                         </div>
 
-                        {/* Επιλογή Μήνα */}
                         <select className="w-full p-2 border border-blue-300 rounded bg-blue-50 font-bold text-blue-900 mb-2" value={statsMonth} onChange={e=>setStatsMonth(e.target.value)}>
                             <option value="ALL">Συνολικά Έτους</option>
                             {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
@@ -302,7 +323,7 @@
                             <h1 className="text-3xl font-bold text-blue-900 mb-6">Airbnb Manager Pro</h1>
                             <input className="w-full p-3 border border-gray-300 rounded mb-4" placeholder="Όνομα Χρήστη" value={username} onChange={e=>setUsername(e.target.value)} />
                             <input className="w-full p-3 border border-gray-300 rounded mb-6" placeholder="Κωδικός" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
-                            <button className="w-full bg-blue-600 text-white font-bold p-3 rounded hover:bg-blue-700" onClick={handleLogin}>Είσοδος</button>
+                            <button className="w-full bg-blue-600 text-white font-bold p-3 rounded hover:bg-blue-700 shadow-md" onClick={handleLogin}>Είσοδος Συστήματος</button>
                         </div>
                     </div>
                 );
@@ -361,7 +382,7 @@
                         <div className="font-bold text-lg">🏠 Airbnb Pro</div>
                         <div className="flex gap-4 items-center">
                             <button onClick={()=>setActiveTab('settings')} className="text-2xl">⚙️</button>
-                            <button className="bg-red-500 px-3 py-1 rounded font-bold text-sm" onClick={()=>setAuthStep('LOGIN')}>Έξοδος</button>
+                            <button className="bg-red-500 px-3 py-1 rounded font-bold text-sm" onClick={()=>{setAuthStep('LOGIN'); setUsername(''); setPassword('');}}>Έξοδος</button>
                         </div>
                     </div>
 
@@ -434,13 +455,17 @@
                             </div>
                         )}
 
-                        {/* ΡΥΘΜΙΣΕΙΣ */}
-                        {activeTab === 'settings' && (
+                        {activeTab === 'settings' && currentUser && (
                             <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
-                                <h3 className="font-bold text-lg mb-4">⚙️ Ρυθμίσεις ({role})</h3>
-                                <label className="block text-sm font-bold mt-3">Νέο Όνομα</label><input id="newU" className="w-full p-2 border rounded mt-1" defaultValue={role === 'admin' ? adminCreds.u : staffCreds.u} />
-                                <label className="block text-sm font-bold mt-3">Νέος Κωδικός</label><input id="newP" type="password" className="w-full p-2 border rounded mt-1" defaultValue={role === 'admin' ? adminCreds.p : staffCreds.p} />
-                                <button className="w-full bg-blue-800 text-white font-bold p-3 rounded mt-6" onClick={() => handleUpdateCreds(document.getElementById('newU').value, document.getElementById('newP').value)}>Αποθήκευση</button>
+                                <h3 className="font-bold text-lg mb-4 text-blue-900">⚙️ Αλλαγή Κωδικών ({role})</h3>
+                                <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded mb-4 border border-blue-200">
+                                    Αλλάζοντας τα στοιχεία εδώ, αλλάζουν για <strong>όλες τις συσκευές</strong> που χρησιμοποιούν τον ρόλο <strong>{role}</strong>.
+                                </div>
+                                <label className="block text-sm font-bold mt-3 text-gray-700">Νέο Όνομα Χρήστη</label>
+                                <input id="newU" className="w-full p-3 border border-gray-300 rounded mt-1 bg-gray-50" defaultValue={currentUser.username} />
+                                <label className="block text-sm font-bold mt-3 text-gray-700">Νέος Κωδικός</label>
+                                <input id="newP" type="password" className="w-full p-3 border border-gray-300 rounded mt-1 bg-gray-50" defaultValue={currentUser.password} />
+                                <button className="w-full bg-blue-800 text-white font-bold p-3 rounded mt-6 shadow" onClick={() => handleUpdateCreds(document.getElementById('newU').value, document.getElementById('newP').value)}>Αποθήκευση στο Cloud</button>
                             </div>
                         )}
                     </div>
